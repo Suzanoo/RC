@@ -1,0 +1,40 @@
+{
+  "coordinates": [
+    {
+      "x": 342.144,
+      "y": 524.469,
+      "newX": 342.185,
+      "newY": 524.461
+    },
+    {
+      "x": 340.644,
+      "y": 524.459,
+      "newX": 340.578,
+      "newY": 524.451
+    },
+    {
+      "x": 340.65,
+      "y": 523.559,
+      "newX": 340.629,
+      "newY": 523.521
+    },
+    {
+      "x": 342.15,
+      "y": 523.569,
+      "newX": 342.146,
+      "newY": 523.541
+    }
+  ],
+  "pileSize": 400,
+  "pileType": "Circle",
+  "pileQuantities": 4,
+  "footingWidth": 2100,
+  "footingLength": 1500,
+  "footingDepth": 750,
+  "columnWidth": 400,
+  "columnLength": 600,
+  "origin": {
+    "x": 341.397,
+    "y": 524.014
+  }
+}

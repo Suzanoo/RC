@@ -1,0 +1,7 @@
+Fy(MPa),A,B,C,D,E,F
+-,Without drop panels,Without drop panels,Without drop panels,With drop panels,Without drop panels,Without drop panels
+-,Exterior panels,Exterior panels,Interior panels,Exterior panels,Exterior panels,Interior panels
+-,Without edge beam,With edge beam,-,Without edge beam,With edge beam,-
+300,Ln/33 ,Ln/36 ,Ln/36 ,Ln/36 ,Ln/40 ,Ln/40
+420,Ln/30 ,Ln/33 ,Ln/33 ,Ln/33 ,Ln/36 ,Ln/36
+520,Ln/28 ,Ln/31 ,Ln/31 ,Ln/31 ,Ln/34 ,Ln/34 
