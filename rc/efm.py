@@ -32,13 +32,13 @@ flags.DEFINE_float("l1", 0, "span along AB, mm")
 flags.DEFINE_float("l2", 0, "span , mm")
 flags.DEFINE_float("lc", 0, "story heigth, mm")
 
-flags.DEFINE_string('type', 'flat_ext', 'flat_ext, flat_int, drop_ext, drop_int, tb_ext, tb_int')
+flags.DEFINE_string('type', 'flat_int', 'flat_ext, flat_int, drop_ext, drop_int, tb_ext, tb_int')
 
 
 def main(_argv):
     sb = Slab_Beam_Stiffness()
     cs = Column_Stiffness()
-    ts = Torsion_Stiffness()
+    ts = Torsion_Stiffness(FLAGS.fc2)
     '''
     flat --> t = t
     drop --> t - drop thickness
@@ -50,40 +50,40 @@ def main(_argv):
         b = FLAGS.l2 / 2
         sb.flat(FLAGS.c1A, FLAGS.c1B, b, FLAGS.t, FLAGS.l1, FLAGS.fc1)
         cs.kc(FLAGS.t, FLAGS.lc, Ic, FLAGS.fc2)
+        ts.flat(FLAGS.c1A, FLAGS.c2A, FLAGS.t, FLAGS.l2)
+
 
     elif FLAGS.type == 'drop_ext':
         b = FLAGS.l2 / 2
         sb.drop_panel(FLAGS.dp1A, FLAGS.dp1B, b, FLAGS.td, FLAGS.l1, FLAGS.fc1)
         cs.kc(FLAGS.td, FLAGS.lc, Ic, FLAGS.fc2)
+        ts.drop_panel(FLAGS.dp1A, FLAGS.dp2A, FLAGS.td, FLAGS.l2)
+        
 
     elif FLAGS.type == 'drop_int':
         b = FLAGS.l2
         sb.drop_panel(FLAGS.dp1A, FLAGS.dp1B, b, FLAGS.t, FLAGS.l1, FLAGS.fc1)
         cs.kc(FLAGS.td, FLAGS.lc, Ic, FLAGS.fc2)
+        ts.drop_panel(FLAGS.dp1A, FLAGS.dp2A, FLAGS.td, FLAGS.l2)
+
 
     elif FLAGS.type == 'tb_ext':
         sb.traverse_beam_exteria(FLAGS.c1A, FLAGS.c1B, FLAGS.bw, FLAGS.h, FLAGS.t,  FLAGS.l1,  FLAGS.l2, FLAGS.fc1)
         cs.kc(FLAGS.h, FLAGS.lc, Ic, FLAGS.fc2)
+        ts.ext_beam(FLAGS.bw, FLAGS.h, FLAGS.t, FLAGS.c2A, FLAGS.l2)
+
 
     elif FLAGS.type == 'tb_int':
         sb.traverse_beam_interia(FLAGS.c1A, FLAGS.c1B, FLAGS.bw, FLAGS.h, FLAGS.t,  FLAGS.l1,  FLAGS.l2, FLAGS.fc1)
         cs.kc(FLAGS.h, FLAGS.lc, Ic, FLAGS.fc2)
+        ts.ext_beam(FLAGS.bw, FLAGS.h, FLAGS.t, FLAGS.c2A, FLAGS.l2)
 
     # Default = Flat at interior
     else: 
         b = FLAGS.l2
         sb.flat(FLAGS.c1A, FLAGS.c1B, b, FLAGS.t, FLAGS.l1, FLAGS.fc1)
         cs.kc(FLAGS.t, FLAGS.lc, Ic, FLAGS.fc2)
-
-    # if FLAGS.type == True:
-    #     sb.drop_panel(FLAGS.c1A, FLAGS.c1B, FLAGS.b, FLAGS.t, FLAGS.l1, FLAGS.fc1)
-    # elif FLAGS.tbext == True:
-    #     sb.traverse_beam_exteria(FLAGS.c1A, FLAGS.c1B, FLAGS.bw, FLAGS.h, FLAGS.t,  FLAGS.l1,  FLAGS.l2, FLAGS.fc1)
-    #     cs.kc(FLAGS.t, FLAGS.lc, Ic, FLAGS.fc2)
-    #     ts.Kt(FLAGS.bw, FLAGS.h, FLAGS.t, FLAGS.c1A, FLAGS.c2A, FLAGS.l1, FLAGS.fc1, type="exterior")
-    # else:
-    #     sb.flat(FLAGS.c1A, FLAGS.c1B, FLAGS.b, FLAGS.t, FLAGS.l1, FLAGS.fc1)
-    #     cs.kc(FLAGS.t, FLAGS.lc, Ic, FLAGS.fc2)
+        ts.flat(FLAGS.dp1A, FLAGS.dp2A, FLAGS.t, FLAGS.l2)
 
     
 

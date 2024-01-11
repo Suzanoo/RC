@@ -1,6 +1,6 @@
 ## **RC design use Python**
 
-### ขั้นตอนการใช้งาน
+### Instructions
 
 1. Install Python, Git, Anaconda, and VSCode
 

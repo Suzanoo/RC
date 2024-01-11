@@ -4,7 +4,36 @@ import pandas as pd
 from tools.section import Rectangle
 from tools.utils import Utils
 
+# Inertia for L-Shape and Tee
+def isb(bw, bf, hw, hf):  
+        A1 = bw * hw
+        A2 = bf * hf
+        d1 = hw /2
+        d2 = hw + hf /2
 
+        A = A1 + A2
+
+        yd = (A1 * d1 + A2 * d2) / A
+        print(f"\nN.A. = {yd:.0f} mm from bottom")
+
+        I1 = (1/12) * bw * pow(hw, 3) + A1 * (yd - d1)**2
+        I2 = (1/12) * bf * pow(hf, 3) + A2 * (yd - d2)**2
+        I = I1 + I2
+        # print(f"I = {I:.2e} mm4")
+        return I
+
+def get_range(df, A_value):
+    # Find the closest values in the  column
+    closest_values_A = df['A'].unique()
+    closest_values_A.sort()
+
+     # Use min and max values if A_value is outside the range
+    closest_lower_A = min(closest_values_A) if A_value < min(closest_values_A) else max([value for value in closest_values_A if value <= A_value]) 
+    closest_upper_A = max(closest_values_A) if A_value > max(closest_values_A) else min([value for value in closest_values_A if value >= A_value])
+
+    return closest_lower_A, closest_upper_A
+
+# Ksb
 class Slab_Beam_Stiffness:
     def __init__(self):
         self.rect = Rectangle()
@@ -23,22 +52,26 @@ class Slab_Beam_Stiffness:
         # Read data from the CSV file
         df = pd.read_csv(path)
 
-        # Find the closest values in the "A" column
-        closest_values_A = df['A'].unique()
-        closest_values_A.sort()
-        closest_lower_A = max([value for value in closest_values_A if value <= A_value])
-        closest_upper_A = min([value for value in closest_values_A if value >= A_value])
-
-        # Find the closest values in the "B" column
-        closest_values_B = df['B'].unique()
-        closest_values_B.sort()
-        closest_lower_B = max([value for value in closest_values_B if value <= B_value])
-        closest_upper_B = min([value for value in closest_values_B if value >= B_value])
+        # Calculate the closest values in the table
+        closest_lower_A, closest_upper_A = get_range(df, A_value)
+        closest_lower_B, closest_upper_B = get_range(df, B_value)
 
         # Find rows that match the nearest values for A and B
         lower_row = df[(df['A'] == closest_lower_A) & (df['B'] == closest_lower_B)].copy().reset_index(drop=True)
         upper_row = df[(df['A'] == closest_upper_A) & (df['B'] == closest_upper_B)].copy().reset_index(drop=True)
 
+        # Check if ['B'] is None use first ['A']
+        '''
+        A   B
+        0.2 0.15
+        0.2 0.25
+
+        Find A = 0.2, B = 0.
+        '''
+        if lower_row.empty:
+            lower_row = df[(df['A'] == closest_lower_A)].copy().reset_index(drop=True)[0:1]
+        if upper_row.empty:
+            upper_row = df[(df['A'] == closest_upper_A)].copy().reset_index(drop=True)[0:1]
 
         # Concatenate the rows to form a new DataFrame
         new_df = pd.concat([lower_row, upper_row])
@@ -101,28 +134,6 @@ class Slab_Beam_Stiffness:
                 print(df)
                 return df
 
-    def Isb(self, bw, bf, hw, hf):  
-        A1 = bw * hw
-        A2 = bf * hf
-        d1 = hw /2
-        d2 = hw + hf /2
-
-        A = A1 + A2
-
-        yd = (A1 * d1 + A2 * d2) / A
-        print(f"N.A. = {yd:.0f} mm from bottom")
-
-        while True:
-            ask = input("Continue? Y|N : ").upper()
-            if ask == "Y":
-                I1 = (1/12) * bw * pow(hw, 3) + A1 * (yd - d1)**2
-                I2 = (1/12) * bf * pow(hf, 3) + A2 * (yd - d2)**2
-                I = I1 + I2
-                print(f"I = {I:.2e} mm4")
-                return I
-            else:
-                break
-
 
     def flat(self, c1A, c1B, b, t, l1, fc):
         '''
@@ -133,34 +144,48 @@ class Slab_Beam_Stiffness:
         t: slab thickness, mm
         '''
         Ec = 4700 * np.sqrt(fc)
-        Is = self.rect.moment_of_inertia(b, t)
+        Is = (1/12) * b * pow(t, 3)
         Ib = 0
   
-        print(f"Slab-Beam Stiffness Coefficien: Flat System")
+        print(f"Slab-Beam Stiffness Coefficien: Flat Slab")
         print(f"c1A/l1 = {c1A/l1:.4f}")
         print(f"c1B/l1 = {c1B/l1:.4f}")
 
-        # Calculate factor values by interpolating
+        # Calculate factor values 
         df = self.get_slab_beam_stiffness(c1A/l1, c1B/l1, "data/slab-beam-coeff.csv")
 
         a = ['K.AB', 'K.BA']
+        m = ['M.AB', 'M.BA']
+        c = ['COF.AB', 'COF.BA']
         b = ['AB', 'BA']
+        Ksb = []
+        COF = []
+        FEM = []
+
         for i in range(0, len(a)):            
             k = df.at[0, a[i]]
             ksb = k * Ec * (Is + Ib) / l1
+
+            Ksb.append(ksb)
+            COF.append(df.at[0, c[i]])
+            FEM.append(df.at[0, m[i]])
+
             print(f"Ksb.{b[i]} = {ksb:.2e} N/mm2")
+  
+        return Ksb, COF, FEM
 
     
-    def drop_panel(self, dp1A, dp1B, b, t, l1, fc):
+
+    def drop_panel(self, dp1A, dp1B, bs, t, l1, fc):
         '''
-        c1A: width of drop-panel A, mm
-        c1B: width of drop-panel B , mm
+        dp1A: width of drop-panel A, mm
+        dp1B: width of drop-panel B , mm
         l1: span along C1A-C1B, mm
         b: slab-beam strip width, mm
         t: slab thickness, mm
         '''
         Ec = 4700 * np.sqrt(fc)
-        Is = self.rect.moment_of_inertia(b, t)
+        Is = (1/12) * bs * pow(t, 3)
         Ib = 0
   
         print(f"Slab-Beam Stiffness Factors: Flat with Drop-Panel")
@@ -171,13 +196,27 @@ class Slab_Beam_Stiffness:
         df = self.get_slab_beam_stiffness(dp1A/l1, dp1B/l1, "data/slab-beam-coeff-with-drop.csv")
 
         a = ['K.AB', 'K.BA']
+        m = ['M.AB', 'M.BA']
+        c = ['COF.AB', 'COF.BA']
         b = ['AB', 'BA']
+        Ksb = []
+        COF = []
+        FEM = []
+
         for i in range(0, len(a)):            
             k = df.at[0, a[i]]
             ksb = k * Ec * (Is + Ib) / l1
+
+            Ksb.append(ksb)
+            COF.append(df.at[0, c[i]])
+            FEM.append(df.at[0, m[i]])
+
             print(f"Ksb.{b[i]} = {ksb:.2e} N/mm2")
 
+        return Ksb, COF, FEM
     
+
+
     def traverse_beam_exteria(self, c1A, c1B, bw, h, t, l1, l2, fc):
         '''
         c1A: width of column A, mm
@@ -196,9 +235,9 @@ class Slab_Beam_Stiffness:
         bf = bw + min(hw, 4 * t)
         
         Ec = 4700 * np.sqrt(fc)
-        Is = self.rect.moment_of_inertia(bs, t)
+        Is = (1/12) * bs * pow(t, 3)
         # Ib = 1.5 * self.rect.moment_of_inertia(bw, h) # TODO why 1.5 
-        Ib = self.Isb(bw, bf, hw, hf)
+        Ib = isb(bw, bf, hw, hf)
 
 
         print(f"Slab-Beam Stiffness Factors: Slab with Beam Traverse")
@@ -209,11 +248,24 @@ class Slab_Beam_Stiffness:
         df = self.get_slab_beam_stiffness(c1A/l1, c1B/l1, "data/slab-beam-coeff.csv")
 
         a = ['K.AB', 'K.BA']
+        m = ['M.AB', 'M.BA']
+        c = ['COF.AB', 'COF.BA']
         b = ['AB', 'BA']
+        Ksb = []
+        COF = []
+        FEM = []
+
         for i in range(0, len(a)):            
             k = df.at[0, a[i]]
             ksb = k * Ec * (Is + Ib) / l1
+
+            Ksb.append(ksb)
+            COF.append(df.at[0, c[i]])
+            FEM.append(df.at[0, m[i]])
+
             print(f"Ksb.{b[i]} = {ksb:.2e} N/mm2")
+
+        return Ksb, COF, FEM
 
 
     
@@ -234,9 +286,9 @@ class Slab_Beam_Stiffness:
         
 
         Ec = 4700 * np.sqrt(fc)
-        Is = self.rect.moment_of_inertia(bs, hf)
+        Is = (1/12) * bs * pow(hf, 3)
         # Ib = self.rect.moment_of_inertia(bw, hw) # TODO why 1.5 
-        Ib = self.Isb(bw, bf, hw, hf)
+        Ib = isb(bw, bf, hw, hf)
 
   
         print(f"Slab-Beam Stiffness Factors: Slab with Beam Traverse")
@@ -246,14 +298,28 @@ class Slab_Beam_Stiffness:
         # Calculate factor values by interpolating
         df = self.get_slab_beam_stiffness(c1A/l1, c1B/l1, "data/slab-beam-coeff.csv")
 
-        x = ['K.AB', 'K.BA']
-        y = ['AB', 'BA']
-        for i in range(0, len(x)):            
-            k = df.at[0, x[i]]
+        a = ['K.AB', 'K.BA']
+        m = ['M.AB', 'M.BA']
+        c = ['COF.AB', 'COF.BA']
+        b = ['AB', 'BA']
+        Ksb = []
+        COF = []
+        FEM = []
+
+        for i in range(0, len(a)):            
+            k = df.at[0, a[i]]
             ksb = k * Ec * (Is + Ib) / l1
-            print(f"Ksb.{y[i]} = {ksb:.2e} N/mm2")
+
+            Ksb.append(ksb)
+            COF.append(df.at[0, c[i]])
+            FEM.append(df.at[0, m[i]])
+
+            print(f"Ksb.{b[i]} = {ksb:.2e} N/mm2")
+
+        return Ksb, COF, FEM
 
 
+# Kc
 class Column_Stiffness:
     '''
     Kc: Column stiffness
@@ -264,15 +330,16 @@ class Column_Stiffness:
     def __init__(self) -> None:
         self.utils = Utils()
 
+
     # Calculated column stifness factors
-    def get_columns_stiffness(self, A_value, path):
-        df = pd.read_csv(path)
+    def get_columns_stiffness(self, A_value):
+        df = pd.read_csv("data/column-coeff.csv")
 
         # Find the closest values in the "A" column
         closest_values_A = df['A'].unique()
         closest_values_A.sort()
 
-         # Use min and max values if A_value is outside the range
+         # Use min and max values if A_value is outside the table
         closest_lower_A = min(closest_values_A) if A_value < min(closest_values_A) else max([value for value in closest_values_A if value <= A_value]) 
         closest_upper_A = max(closest_values_A) if A_value > max(closest_values_A) else min([value for value in closest_values_A if value >= A_value])
 
@@ -280,12 +347,11 @@ class Column_Stiffness:
         lower_row = df[(df['A'] == closest_lower_A)].copy().reset_index(drop=True)
         upper_row = df[(df['A'] == closest_upper_A)].copy().reset_index(drop=True)
 
-        # If A_value is lower than the range, use lower_row
-        if A_value <= min(closest_values_A):
+
+        # If sames row use only one
+        if closest_lower_A == closest_upper_A:
             df = lower_row
-        # If A_value is higher than the range, use upper_row
-        elif A_value >= max(closest_values_A):
-            df = upper_row
+        # Else use interpolation
         else:
             # Concatenate the rows to form a new DataFrame
             new_df = pd.concat([lower_row, upper_row])
@@ -312,21 +378,28 @@ class Column_Stiffness:
     # Column stiffness(Kc)
     def kc(self, c1A, lc, Ic, fc):
         '''
-        c1A : Thickness of slab with drop panel or column capital or beam above the column in direction of l1, mm
+        Warning !!!
+            c1A : Thickness of slab with drop panel or
+            column capital or
+            beam above the column in direction of l1, mm
         '''
         Ec =4700 * np.sqrt(fc)
 
-        print(f"\nc1A/lc = {c1A/lc:.4f}")
-        df = self.get_columns_stiffness(c1A/lc, "data/column-coeff.csv")
+        print(f"c1A/lc = {c1A/lc:.4f}")
+        df = self.get_columns_stiffness(c1A/lc)
 
         a = ['K.AB', 'K.BA']
         b = ['bot', 'top']
+        Kc = []
         for i in range(0, len(a)):            
             k = df.at[0, a[i]]
             kc = k * Ec * Ic / lc
+            Kc.append(kc)
             print(f"Kc.{b[i]} = {kc:.2e} N/mm2")
+        return Kc
 
 
+# Kt
 class Torsion_Stiffness:
     '''
     flat slab: c1 x hf
@@ -334,31 +407,38 @@ class Torsion_Stiffness:
     with traverse beam(exterior): L-beam,  h x (w + min(hw, 4 * t))
     with traverse beam(interior): T- beam,  h x (w + 2 * min(hw, 4 * t))
     '''
-    def __init__(self,) :
-        pass
+    def __init__(self, fc) :
+        self.Ec =4700 * np.sqrt(fc)
 
 
-    def flat(self, c1, t):
+    def flat(self, c1, c2, t, l2):
         '''
         c1: column width
         t: slab thickness
         '''
         x1 = t
         y1 = c1
-        return (1 - 0.63 * (x1 / y1)) * (pow(x1, 3) * y1) / 3
+        C =  (1 - 0.63 * (x1 / y1)) * (pow(x1, 3) * y1) / 3
+        Kt =  9 * self.Ec * C / (l2 * pow((1 - c2 / l2), 3))
+        print(f"Kt = {Kt:.2e} N.mm")
+        return Kt
+    
 
-
-    def drop_panel(self, c1, t):
+    def drop_panel(self, c1, c2, td, l2):
         '''
-        c1: column width or capital width
-        t: slab thickness
+        c1 x c2: drop dimension
+        td: drop thickness
+        l2: strip width
         '''
         x1 = c1
-        y1 = t
-        return (1 - 0.63 * (x1 / y1)) * (pow(x1, 3) * y1) / 3
+        y1 = td
+        C =  (1 - 0.63 * (x1 / y1)) * (pow(x1, 3) * y1) / 3
+        Kt =  9 * self.Ec * C / (l2 * pow((1 - c2 / l2), 3))
+        print(f"Kt = {Kt:.2e} N.mm")
+        return Kt
 
 
-    def ext_beam(self, h, hw, hf, bw, bf):
+    def ext_beam(self, bw, h, t, c2, l1, l2):
         '''
         h: beam depth
         hf: flange thickness
@@ -366,6 +446,11 @@ class Torsion_Stiffness:
         bw: beam(web) width
         bf: flange width
         '''
+        hw = h - t
+        hf = t
+        bf = bw +  min(hw, 4 * hf)
+        bs = l1 + bw
+
         x1 = bw
         x2 = hf
         y1 = h
@@ -380,10 +465,16 @@ class Torsion_Stiffness:
         C2 = (1 - 0.63 * (x2 / y2)) * (pow(x2, 3) * y2) / 3
         CB = C1 + C2
 
-        return max(CA, CB)
+        C =  max(CA, CB)
+        Is = (1/12) * bs * pow(hf, 3)
+        Isb = isb(bw, bs, hw, hf)
+        Kt =  9 * self.Ec * C / (l2 * pow((1 - c2 / l2), 3))
+        Kt =  Kt * Isb / Is
+        print(f"Kt = {Kt:.2e} N.mm")
+        return Kt
 
 
-    def tee(self, hw, hf, bw, bf):
+    def tee(self, bw, h, t, c2, l1, l2):
         '''
         h: beam depth
         hf: flange thickness
@@ -391,67 +482,23 @@ class Torsion_Stiffness:
         bw: beam(web) width
         bf: flange width
         '''
+        hw = h - t
+        hf = t
+        bf = bw +  2 * min(hw, 4 * hf)
+        bs = l1 
+
         x1 = hf
         x2 = hw
         y1 = bf
         y2 = bw
         C1 = (1 - 0.63 * (x1 / y1)) * (pow(x1, 3) * y1) / 3
         C2 = (1 - 0.63 * (x2 / y2)) * (pow(x2, 3) * y2) / 3
-        return C1 + C2
+        C =  C1 + C2
+    
+        Is = (1/12) * bs * pow(hf, 3)
+        Isb = isb(bw, bs, hw, hf)
 
-
-    # Isb for L-shape or Tee-shape
-    def Isb(self, bw, bf, hw, hf):  
-        A1 = bw * hw
-        A2 = bf * hf
-        d1 = hw /2
-        d2 = hw + hf /2
-
-        A = A1 + A2
-
-        yd = (A1 * d1 + A2 * d2) / A
-        print(f"N.A. = {yd:.0f} mm from bottom")
-
-        while True:
-            ask = input("Continue? Y|N : ").upper()
-            if ask == "Y":
-                I1 = (1/12) * bw * pow(hw, 3) + A1 * (yd - d1)**2
-                I2 = (1/12) * bf * pow(hf, 3) + A2 * (yd - d2)**2
-                I = I1 + I2
-                print(f"I = {I:.2e} mm4")
-                return I
-            else:
-                break
-
-
-    def Kt(self, bw, h, t, c1, c2, l2, fc, type="flat"):
-        hw = h - t
-        hf = t
-        bf = bw +  min(hw, 4 * hf)
-        Ec =4700 * np.sqrt(fc)
-
-        if type == "drop":
-            C = self.drop_panel(c1, t)
-            Kt =  9 * Ec * C / (l2 * np.pow((1 - c2 / l2), 3))
-            return Kt
-        elif type == "exterior":
-            C = self.ext_beam( h, hw, hf, bw, bf)
-            Is = (1/12) * bf * pow(hf, 3)
-            Isb = self.Isb(bw, bf, hw, hf)
-            Kt =  9 * Ec * C / (l2 * np.pow((1 - c2 / l2), 3))
-            Kt =  Kt * Isb / Is
-            return Kt
-        elif type == "tee":
-            C = self.tee(hw, hf, bw, bf)
-            Is = (1/12) * bf * pow(hf, 3)
-            Isb = self.Isb(bw, bf, hw, hf)
-            Kt =  9 * Ec * C / (l2 * np.pow((1 - c2 / l2), 3))
-            Kt =  Kt * Isb / Is
-            return Kt
-        else:
-            C = self.flat(c1, t)
-            Kt =  9 * Ec * C / (l2 * np.pow((1 - c2 / l2), 3))
-            return Kt
-
-
-
+        Kt =  9 * self.Ec * C / (l2 * pow((1 - c2 / l2), 3))
+        Kt =  Kt * Isb / Is
+        print(f"Kt = {Kt:.2e} N.mm")
+        return Kt

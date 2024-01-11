@@ -127,5 +127,4 @@ How to used?
     % python rc/beam_design.py --fc=24 --fy=390 --b=25 --h=40 --l=5 --Mu=5 --Vu=2.5
     % python rc/beam_design.py --fc=30 --fy=390 --fv=390 --b=30 --h=50 --l=6 --c=5 --Mu=183 --Vu=50 --Tu=20
     
--you can easy run the code with other FLAGS defined above if you want.
 """
